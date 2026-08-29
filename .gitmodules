@@ -1,0 +1,7 @@
+[submodule "vendor/mcpelauncher-extract"]
+	path = vendor/mcpelauncher-extract
+	url = https://github.com/minecraft-linux/mcpelauncher-extract.git
+[submodule "vendor/mcpelauncher-manifest"]
+	path = vendor/mcpelauncher-manifest
+	url = https://github.com/SrDicov/mcpelauncher-manifest.git
+	branch = musl
