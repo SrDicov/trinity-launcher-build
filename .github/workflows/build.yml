@@ -9,6 +9,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: alpine:latest
+    env:
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
     steps:
       - name: Install build dependencies (musl)
         run: |
@@ -33,8 +35,8 @@ jobs:
           mkdir -p /tmp/artifacts
           cmake -S vendor/mcpelauncher-extract -B /tmp/b-extract \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto=thin" \
-            -DCMAKE_EXE_LINKER_FLAGS="-flto=thin"
+            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto" \
+            -DCMAKE_EXE_LINKER_FLAGS="-flto"
           cmake --build /tmp/b-extract -j"$(nproc)"
           cp /tmp/b-extract/mcpelauncher-extract /tmp/artifacts/ || true
 
@@ -42,8 +44,8 @@ jobs:
         run: |
           cmake -S vendor/mcpelauncher-manifest -B /tmp/b-manifest \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto=thin" \
-            -DCMAKE_EXE_LINKER_FLAGS="-flto=thin" \
+            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto" \
+            -DCMAKE_EXE_LINKER_FLAGS="-flto" \
             -DBUILD_CLIENT=ON -DBUILD_UI=OFF -DBUILD_X86=OFF \
             -DUSE_OWN_CURL=OFF -DXAL_WEBVIEW_USE_QT=OFF -DXAL_WEBVIEW_USE_CLI=ON \
             -DUSE_SDL3_AUDIO=ON
@@ -54,9 +56,9 @@ jobs:
         run: |
           cmake -S . -B /tmp/b-trinity \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto=thin" \
-            -DCMAKE_C_FLAGS="-O3 -msse3 -flto=thin" \
-            -DCMAKE_EXE_LINKER_FLAGS="-flto=thin"
+            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto" \
+            -DCMAKE_C_FLAGS="-O3 -msse3 -flto" \
+            -DCMAKE_EXE_LINKER_FLAGS="-flto"
           cmake --build /tmp/b-trinity -j"$(nproc)"
           find /tmp/b-trinity -type f -name trinity -exec cp {} /tmp/artifacts/ \;
 
