@@ -1,6 +1,17 @@
 #ifndef MUSL_COMPAT_H
 #define MUSL_COMPAT_H
 
+/* clang nullability annotations are not supported by GCC; treat as nothing */
+#ifndef _Nullable
+#define _Nullable
+#endif
+#ifndef _Nonnull
+#define _Nonnull
+#endif
+#ifndef _Null_unspecified
+#define _Null_unspecified
+#endif
+
 /* _Atomic is a C11 keyword in C, but not exposed as a keyword in C++ here.
    Map it to std::atomic for the bionic headers. */
 #ifdef __cplusplus
