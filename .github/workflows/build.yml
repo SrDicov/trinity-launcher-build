@@ -22,7 +22,8 @@ jobs:
           xbps-install -y bash git cmake ninja gcc curl python3 pkg-config make file linux-headers \
             qt6-base-devel qt6-svg-devel qt6-declarative-devel qt6-tools qt6-tools-devel \
             libcurl-devel libpng-devel MesaLib-devel libgbm-devel libevdev-devel eudev-libudev-devel \
-            openssl-devel zlib-devel libzstd-devel libzip-devel libX11-devel libxcb-devel
+            openssl-devel zlib-devel libzstd-devel libzip-devel libX11-devel libxcb-devel \
+            wayland-devel wayland-protocols libxkbcommon-devel
 
       - name: Checkout (recursive, shell)
         shell: bash
@@ -66,7 +67,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
             -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
             -DBUILD_CLIENT=ON -DBUILD_UI=OFF -DBUILD_X86=OFF \
-            -DUSE_OWN_CURL=OFF -DXAL_WEBVIEW_USE_QT=OFF -DXAL_WEBVIEW_USE_CLI=ON -DUSE_SDL3_AUDIO=ON
+            -DUSE_OWN_CURL=OFF -DXAL_WEBVIEW_USE_QT=OFF -DXAL_WEBVIEW_USE_CLI=ON -DUSE_SDL3_AUDIO=ON \
+            -DGAMEWINDOW_SYSTEM=SDL3 -DSDL_WAYLAND=ON
           cmake --build vendor/mcpelauncher-manifest/build -j"$(nproc)"
           # 3) trinity (Qt6 frontend)
           cmake -B build -S . \
