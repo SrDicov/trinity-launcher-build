@@ -6,7 +6,61 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-app:
+    runs-on: ubuntu-latest
+    container: alpine:latest
+    env:
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+    steps:
+      - name: Install build dependencies (musl)
+        run: |
+          apk add --no-cache build-base cmake ninja clang git bash nodejs file \
+            sqlite-dev openssl-dev curl-dev libpng-dev libzip-dev \
+            qt6-qtbase-dev qt6-qttools-dev libunwind-dev
+
+      - name: Checkout (no submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
+
+      - name: Init submodules (shallow, recursive)
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --recursive --depth 1
+
+      - name: Build mcpelauncher-extract
+        run: |
+          mkdir -p /tmp/artifacts-app
+          cmake -S vendor/mcpelauncher-extract -B /tmp/b-extract \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
+            -DCMAKE_EXE_LINKER_FLAGS="-flto"
+          cmake --build /tmp/b-extract -j"$(nproc)"
+          cp /tmp/b-extract/mcpelauncher-extract /tmp/artifacts-app/ || true
+
+      - name: Build Trinity Launcher (native musl)
+        run: |
+          cmake -S . -B /tmp/b-trinity \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
+            -DCMAKE_C_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
+            -DCMAKE_EXE_LINKER_FLAGS="-flto"
+          cmake --build /tmp/b-trinity -j"$(nproc)"
+          find /tmp/b-trinity -type f -name trinity -exec cp {} /tmp/artifacts-app/ \;
+
+      - name: Inspect artifacts
+        run: |
+          ls -la /tmp/artifacts-app/
+          file /tmp/artifacts-app/* 2>/dev/null || true
+
+      - name: Upload musl app binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: trinity-musl-app
+          path: /tmp/artifacts-app/
+
+  build-client:
     runs-on: ubuntu-latest
     container: alpine:latest
     env:
@@ -31,45 +85,28 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --recursive --depth 1
 
-      - name: Build mcpelauncher-extract
-        run: |
-          mkdir -p /tmp/artifacts
-          cmake -S vendor/mcpelauncher-extract -B /tmp/b-extract \
-            -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
-            -DCMAKE_EXE_LINKER_FLAGS="-flto"
-          cmake --build /tmp/b-extract -j"$(nproc)"
-          cp /tmp/b-extract/mcpelauncher-extract /tmp/artifacts/ || true
-
       - name: Build mcpelauncher-client (native musl)
         run: |
+          mkdir -p /tmp/artifacts-client
           cmake -S vendor/mcpelauncher-manifest -B /tmp/b-manifest \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
+            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE" \
+            -DCMAKE_C_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE" \
             -DCMAKE_EXE_LINKER_FLAGS="-flto" \
             -DBUILD_CLIENT=ON -DBUILD_UI=OFF -DBUILD_X86=OFF \
             -DUSE_OWN_CURL=OFF -DXAL_WEBVIEW_USE_QT=OFF -DXAL_WEBVIEW_USE_CLI=ON \
             -DUSE_SDL3_AUDIO=ON
           cmake --build /tmp/b-manifest -j"$(nproc)" --target mcpelauncher-client
-          find /tmp/b-manifest -type f -name mcpelauncher-client -exec cp {} /tmp/artifacts/ \;
-
-      - name: Build Trinity Launcher (native musl)
-        run: |
-          cmake -S . -B /tmp/b-trinity \
-            -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
-            -DCMAKE_C_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
-            -DCMAKE_EXE_LINKER_FLAGS="-flto"
-          cmake --build /tmp/b-trinity -j"$(nproc)"
-          find /tmp/b-trinity -type f -name trinity -exec cp {} /tmp/artifacts/ \;
+          find /tmp/b-manifest -type f -name mcpelauncher-client -exec cp {} /tmp/artifacts-client/ \;
 
       - name: Inspect artifacts
         run: |
-          ls -la /tmp/artifacts/
-          file /tmp/artifacts/* 2>/dev/null || true
+          ls -la /tmp/artifacts-client/
+          file /tmp/artifacts-client/* 2>/dev/null || true
 
-      - name: Upload musl binaries
+      - name: Upload musl client binary
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trinity-musl-binaries
-          path: /tmp/artifacts/
+          name: trinity-musl-client
+          path: /tmp/artifacts-client/
