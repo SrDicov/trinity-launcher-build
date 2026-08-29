@@ -23,20 +23,25 @@
 #ifndef strtoq
 #define strtoq strtoll
 #endif
-#ifndef strtoul_l
-#define strtoul_l(a, b, c, d) strtoul((a), (b), (c))
+
+/* glibc has these natively; musl does not. libc-shim (SrDicov fork) provides
+   the real definitions, but every TU needs the declarations. */
+#include <sys/socket.h>
+#include <locale.h>
+#include <time.h>
+#include <cstdio>
+#ifdef __cplusplus
+extern "C" {
 #endif
-#ifndef strtoull_l
-#define strtoull_l(a, b, c, d) strtoull((a), (b), (c))
-#endif
-#ifndef strtoll_l
-#define strtoll_l(a, b, c, d) strtoll((a), (b), (c))
-#endif
-#ifndef strptime_l
-#define strptime_l(b, f, t, l) strptime((b), (f), (t))
-#endif
-#ifndef __cmsg_nxthdr
-#define __cmsg_nxthdr(m, c) CMSG_NXTHDR((m), (c))
+char *strptime_l(const char *buf, const char *fmt, struct tm *tm);
+unsigned long strtoul_l(const char *nptr, char **endptr, int base, locale_t loc);
+long strtoll_l(const char *nptr, char **endptr, int base, locale_t loc);
+unsigned long long strtoull_l(const char *nptr, char **endptr, int base, locale_t loc);
+float strtof_l(const char *nptr, char **endptr, locale_t loc);
+long double strtold_l(const char *nptr, char **endptr, locale_t loc);
+struct cmsghdr *__cmsg_nxthdr(struct msghdr *m, struct cmsghdr *c);
+#ifdef __cplusplus
+}
 #endif
 
 #endif
