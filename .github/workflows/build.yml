@@ -90,8 +90,8 @@ jobs:
           mkdir -p /tmp/artifacts-client
           cmake -S vendor/mcpelauncher-manifest -B /tmp/b-manifest \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE" \
-            -DCMAKE_C_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE" \
+            -DCMAKE_CXX_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -include ${{ github.workspace }}/musl-compat.h -Wno-error -fpermissive" \
+            -DCMAKE_C_FLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -include ${{ github.workspace }}/musl-compat.h" \
             -DCMAKE_EXE_LINKER_FLAGS="-flto" \
             -DBUILD_CLIENT=ON -DBUILD_UI=OFF -DBUILD_X86=OFF \
             -DUSE_OWN_CURL=OFF -DXAL_WEBVIEW_USE_QT=OFF -DXAL_WEBVIEW_USE_CLI=ON \
