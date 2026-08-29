@@ -29,7 +29,6 @@
 #include <sys/socket.h>
 #include <locale.h>
 #include <time.h>
-#include <cstdio>
 #ifdef __cplusplus
 extern "C" {
 #endif
