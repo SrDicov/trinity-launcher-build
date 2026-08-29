@@ -16,7 +16,7 @@ jobs:
       - name: Install build dependencies (Void musl)
         run: |
           xbps-install -S
-          xbps-install -y bash git cmake ninja gcc gcc-c++ pkg-config make file linux-headers \
+          xbps-install -y bash git cmake ninja gcc pkg-config make file linux-headers \
             qt6-base-devel qt6-svg-devel qt6-declarative-devel \
             libcurl-devel libpng-devel MesaLib-devel libgbm-devel libevdev-devel eudev-libudev-devel \
             openssl-devel zlib-devel libzstd-devel libzip-devel libX11-devel libxcb-devel
