@@ -19,7 +19,7 @@ jobs:
       - name: Install build dependencies (Void musl)
         run: |
           xbps-install -S
-          xbps-install -y bash git cmake ninja gcc curl pkg-config make file linux-headers \
+          xbps-install -y bash git cmake ninja gcc curl python3 pkg-config make file linux-headers \
             qt6-base-devel qt6-svg-devel qt6-declarative-devel qt6-tools qt6-tools-devel \
             libcurl-devel libpng-devel MesaLib-devel libgbm-devel libevdev-devel eudev-libudev-devel \
             openssl-devel zlib-devel libzstd-devel libzip-devel libX11-devel libxcb-devel
@@ -52,12 +52,17 @@ jobs:
           COMPAT="$(pwd)/musl-compat.h"
           CXXFLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_GNU_SOURCE -include $COMPAT -Wno-error -fpermissive"
           CFLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_GNU_SOURCE -include $COMPAT"
-          cmake -B build -S . \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
-            -DBUILD_CLIENT=ON -DBUILD_UI=ON -DBUILD_X86=OFF \
+          COMMON="-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_FLAGS=$CFLAGS -DCMAKE_CXX_FLAGS=$CXXFLAGS"
+          # 1) mcpelauncher-extract
+          cmake -B vendor/mcpelauncher-extract/build -S vendor/mcpelauncher-extract $COMMON
+          cmake --build vendor/mcpelauncher-extract/build -j"$(nproc)"
+          # 2) mcpelauncher-client (bionic loader from manifest)
+          cmake -B vendor/mcpelauncher-manifest/build -S vendor/mcpelauncher-manifest $COMMON \
+            -DBUILD_CLIENT=ON -DBUILD_UI=OFF -DBUILD_X86=OFF \
             -DUSE_OWN_CURL=OFF -DXAL_WEBVIEW_USE_QT=OFF -DXAL_WEBVIEW_USE_CLI=ON -DUSE_SDL3_AUDIO=ON
+          cmake --build vendor/mcpelauncher-manifest/build -j"$(nproc)"
+          # 3) trinity (Qt6 frontend)
+          cmake -B build -S . $COMMON
           cmake --build build -j"$(nproc)"
 
       - name: Publish to release 20260829
@@ -67,21 +72,27 @@ jobs:
         run: |
           cd repo
           mkdir -p dist
-          find build -type f -name mcpelauncher-extract -exec cp {} dist/ \;
+          find vendor/mcpelauncher-extract/build -type f -name mcpelauncher-extract -exec cp {} dist/ \;
+          find vendor/mcpelauncher-manifest/build -type f -name mcpelauncher-client -exec cp {} dist/ \;
           find build -type f -name trinity -exec cp {} dist/ \;
-          find build -type f -name mcpelauncher-client -exec cp {} dist/ \;
           ls -la dist
-          RELID=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/tags/20260829" | grep -oE '"id": [0-9]+' | head -1 | grep -oE '[0-9]+')
+          RELJSON=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/tags/20260829")
+          RELID=$(echo "$RELJSON" | grep -oE '"id": [0-9]+' | head -1 | grep -oE '[0-9]+')
           echo "release id=$RELID"
+          ASSETS=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets")
           for name in mcpelauncher-extract mcpelauncher-client trinity; do
-            AID=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets" | python3 -c "import json,sys;d=json.load(sys.stdin);print([a['id'] for a in d if a['name']=='$name'])" )
+            AID=$(echo "$ASSETS" | python3 -c "import json,sys;d=json.load(sys.stdin);print([a['id'] for a in d if a['name']=='$name'])" 2>/dev/null)
             if [ -n "$AID" ] && [ "$AID" != "[]" ]; then
-              curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/assets/$AID"
+              curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/assets/$AID" >/dev/null
             fi
           done
           for b in mcpelauncher-extract mcpelauncher-client trinity; do
-            curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" \
-              --data-binary @"dist/$b" "https://uploads.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets?name=$b" \
-              | grep -oE '"name": "[^"]+"' | head -1
+            if [ -f "dist/$b" ]; then
+              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" \
+                --data-binary @"dist/$b" "https://uploads.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets?name=$b" >/dev/null
+              echo "uploaded $b"
+            else
+              echo "WARNING: dist/$b missing"
+            fi
           done
           echo "PUBLISHED https://github.com/SrDicov/trinity-launcher-build/releases/tag/20260829"
