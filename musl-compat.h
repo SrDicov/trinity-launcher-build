@@ -17,6 +17,16 @@
 #define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP PTHREAD_MUTEX_INITIALIZER
 #endif
 
+#ifndef TEMP_FAILURE_RETRY
+#define TEMP_FAILURE_RETRY(expression) \
+    (__extension__ ({ \
+        long int __result; \
+        do __result = (long int)(expression); \
+        while (__result == -1L && errno == EINTR); \
+        __result; \
+    }))
+#endif
+
 #ifndef strtouq
 #define strtouq strtoull
 #endif
@@ -29,6 +39,7 @@
 #include <sys/socket.h>
 #include <locale.h>
 #include <time.h>
+#include <errno.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,5 +53,10 @@ struct cmsghdr *__cmsg_nxthdr(struct msghdr *m, struct cmsghdr *c);
 #ifdef __cplusplus
 }
 #endif
+
+/* getprogname is BSD/glibc; provide it inline everywhere (musl has the var). */
+static inline const char *getprogname(void) {
+    return program_invocation_short_name;
+}
 
 #endif
