@@ -52,17 +52,22 @@ jobs:
           COMPAT="$(pwd)/musl-compat.h"
           CXXFLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_GNU_SOURCE -include $COMPAT -Wno-error -fpermissive"
           CFLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_GNU_SOURCE -include $COMPAT"
-          COMMON="-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_FLAGS=$CFLAGS -DCMAKE_CXX_FLAGS=$CXXFLAGS"
           # 1) mcpelauncher-extract
-          cmake -B vendor/mcpelauncher-extract/build -S vendor/mcpelauncher-extract $COMMON
+          cmake -B vendor/mcpelauncher-extract/build -S vendor/mcpelauncher-extract \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS"
           cmake --build vendor/mcpelauncher-extract/build -j"$(nproc)"
           # 2) mcpelauncher-client (bionic loader from manifest)
-          cmake -B vendor/mcpelauncher-manifest/build -S vendor/mcpelauncher-manifest $COMMON \
+          cmake -B vendor/mcpelauncher-manifest/build -S vendor/mcpelauncher-manifest \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
             -DBUILD_CLIENT=ON -DBUILD_UI=OFF -DBUILD_X86=OFF \
             -DUSE_OWN_CURL=OFF -DXAL_WEBVIEW_USE_QT=OFF -DXAL_WEBVIEW_USE_CLI=ON -DUSE_SDL3_AUDIO=ON
           cmake --build vendor/mcpelauncher-manifest/build -j"$(nproc)"
           # 3) trinity (Qt6 frontend)
-          cmake -B build -S . $COMMON
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS"
           cmake --build build -j"$(nproc)"
 
       - name: Publish to release 20260829
