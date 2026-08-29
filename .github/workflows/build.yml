@@ -36,7 +36,7 @@ jobs:
           git checkout "${GITHUB_SHA}"
           git submodule update --init --recursive
 
-      - name: Patch musl headers (__unused clash with bionic)
+      - name: Patch musl headers (__unused clash + sys/cdefs.h shim)
         shell: bash
         run: |
           for f in /usr/include/bits/stat.h /usr/include/bits/statvfs.h; do
@@ -44,6 +44,10 @@ jobs:
               sed -i 's/__unused/__musl_unused/g' "$f"
             fi
           done
+          # musl has no glibc <sys/cdefs.h>; bionic's wrapper does #include_next <sys/cdefs.h>
+          mkdir -p /usr/include/sys
+          cp repo/musl-shim/sys/cdefs.h /usr/include/sys/cdefs.h
+          echo "installed sys/cdefs.h shim"
 
       - name: Configure & Build (extract + client + trinity)
         shell: bash
