@@ -1,0 +1,20 @@
+# Template file for 'mcpelauncher-client'
+pkgname=mcpelauncher-client
+version=20260829
+revision=1
+archs="x86_64-musl"
+short_desc="Minecraft Bedrock client loader (bionic-based, native musl port)"
+maintainer="SrDicov <sr.dicov@example.com>"
+license="GPL-3.0-or-later"
+homepage="https://github.com/SrDicov/trinity-launcher-build"
+distfiles="https://github.com/SrDicov/trinity-launcher-build/releases/download/${version}/mcpelauncher-client"
+checksum=0087bde5b88ac03a871481e8087f9e3ca7ed8df8dc7c3a27eac8713fb2676d33
+depends="libcurl libpng mesa libX11 libevdev eudev openssl zlib zstd"
+
+do_extract() {
+	:
+}
+
+do_install() {
+	vbin "${XBPS_SRCDISTDIR}/${pkgname}-${version}/mcpelauncher-client"
+}

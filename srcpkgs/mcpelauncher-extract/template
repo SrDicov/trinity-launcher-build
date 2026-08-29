@@ -1,0 +1,20 @@
+# Template file for 'mcpelauncher-extract'
+pkgname=mcpelauncher-extract
+version=20260829
+revision=1
+archs="x86_64-musl"
+short_desc="Minecraft Bedrock APK extractor/launcher helper (native musl build)"
+maintainer="SrDicov <sr.dicov@example.com>"
+license="GPL-3.0-or-later"
+homepage="https://github.com/SrDicov/trinity-launcher-build"
+distfiles="https://github.com/SrDicov/trinity-launcher-build/releases/download/${version}/mcpelauncher-extract"
+checksum=9f3245778fd3ba6410ff67bb026e096f7e7883208d8cfc7db5a62f99fed69a9d
+depends="libzip zlib"
+
+do_extract() {
+	:
+}
+
+do_install() {
+	vbin "${XBPS_SRCDISTDIR}/${pkgname}-${version}/mcpelauncher-extract"
+}
