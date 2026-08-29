@@ -85,6 +85,11 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --recursive --depth 1
 
+      - name: Patch musl headers (bionic __unused macro clashes with musl struct fields)
+        run: |
+          sed -i 's/__unused/__musl_unused/g' /usr/include/bits/stat.h
+          sed -i 's/__unused/__musl_unused/g' /usr/include/bits/statvfs.h 2>/dev/null || true
+
       - name: Build mcpelauncher-client (native musl)
         run: |
           mkdir -p /tmp/artifacts-client
