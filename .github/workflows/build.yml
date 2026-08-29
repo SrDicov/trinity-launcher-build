@@ -25,6 +25,7 @@ jobs:
 
       - name: Init submodules (shallow, recursive)
         run: |
+          git config --global --add safe.directory '*'
           git submodule update --init --recursive --depth 1
 
       - name: Build mcpelauncher-extract
