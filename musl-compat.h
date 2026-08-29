@@ -5,6 +5,7 @@
    Map it to std::atomic for the bionic headers. */
 #ifdef __cplusplus
 #include <atomic>
+#include <cstddef>
 #ifndef _Atomic
 #define _Atomic(T) std::atomic<T>
 #endif
@@ -25,7 +26,7 @@ typedef std::atomic<long> atomic_long;
 typedef std::atomic<unsigned long> atomic_ulong;
 #endif
 #ifndef atomic_size_t
-typedef std::atomic<size_t> atomic_size_t;
+typedef std::atomic<std::size_t> atomic_size_t;
 #endif
 #ifndef atomic_pointer
 typedef std::atomic<void *> atomic_pointer;
