@@ -8,6 +8,28 @@
 #ifndef _Atomic
 #define _Atomic(T) std::atomic<T>
 #endif
+/* C11 atomic typedefs used by bionic/linker headers (not provided by C++ <atomic>) */
+#ifndef atomic_bool
+typedef std::atomic<bool> atomic_bool;
+#endif
+#ifndef atomic_int
+typedef std::atomic<int> atomic_int;
+#endif
+#ifndef atomic_uint
+typedef std::atomic<unsigned int> atomic_uint;
+#endif
+#ifndef atomic_long
+typedef std::atomic<long> atomic_long;
+#endif
+#ifndef atomic_ulong
+typedef std::atomic<unsigned long> atomic_ulong;
+#endif
+#ifndef atomic_size_t
+typedef std::atomic<size_t> atomic_size_t;
+#endif
+#ifndef atomic_pointer
+typedef std::atomic<void *> atomic_pointer;
+#endif
 #include <libgen.h>
 #include <cstdlib>
 #endif
