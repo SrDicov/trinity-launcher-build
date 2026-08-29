@@ -17,7 +17,8 @@ jobs:
           apk add --no-cache build-base cmake ninja clang git bash nodejs file \
             sqlite-dev openssl-dev curl-dev pulseaudio-dev mesa-dev \
             libx11-dev libxkbcommon-dev wayland-dev libxi-dev libpng-dev \
-            libzip-dev qt6-qtbase-dev qt6-qttools-dev libunwind-dev
+            libzip-dev libevdev-dev eudev-dev \
+            qt6-qtbase-dev qt6-qttools-dev libunwind-dev
 
       - name: Checkout (no submodules)
         uses: actions/checkout@v4
