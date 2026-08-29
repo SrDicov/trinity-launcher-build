@@ -81,23 +81,27 @@ jobs:
         run: |
           cd repo
           mkdir -p dist
-          find vendor/mcpelauncher-extract/build -type f -name mcpelauncher-extract -exec cp {} dist/ \;
-          find vendor/mcpelauncher-manifest/build -type f -name mcpelauncher-client -exec cp {} dist/ \;
-          find build -type f -name trinity -exec cp {} dist/ \;
+          # locate + copy each binary (first match only, no head pipes)
+          for b in mcpelauncher-extract mcpelauncher-client trinity; do
+            f=$(find vendor/mcpelauncher-extract/build vendor/mcpelauncher-manifest/build build -type f -name "$b" 2>/dev/null)
+            f=${f%%$'\n'*}
+            if [ -n "$f" ] && [ -f "$f" ]; then cp -v "$f" "dist/$b"; else echo "WARNING: $b missing"; fi
+          done
           ls -la dist
-          RELJSON=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/tags/20260829")
-          RELID=$(echo "$RELJSON" | grep -oE '"id": [0-9]+' | head -1 | grep -oE '[0-9]+')
+          AUTH="Authorization: Bearer $TOKEN"
+          RELJSON=$(curl -s -H "$AUTH" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/tags/20260829")
+          RELID=$(echo "$RELJSON" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('id',''))")
           echo "release id=$RELID"
-          ASSETS=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets")
+          ASSETS=$(curl -s -H "$AUTH" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets")
           for name in mcpelauncher-extract mcpelauncher-client trinity; do
-            AID=$(echo "$ASSETS" | python3 -c "import json,sys;d=json.load(sys.stdin);print([a['id'] for a in d if a['name']=='$name'])" 2>/dev/null)
-            if [ -n "$AID" ] && [ "$AID" != "[]" ]; then
-              curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/assets/$AID" >/dev/null
+            AID=$(echo "$ASSETS" | python3 -c "import json,sys;d=json.load(sys.stdin);ids=[a['id'] for a in d if a['name']=='$name'];print(ids[0] if ids else '')" 2>/dev/null)
+            if [ -n "$AID" ]; then
+              curl -s -X DELETE -H "$AUTH" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/assets/$AID" >/dev/null
             fi
           done
           for b in mcpelauncher-extract mcpelauncher-client trinity; do
             if [ -f "dist/$b" ]; then
-              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" \
+              curl -s -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
                 --data-binary @"dist/$b" "https://uploads.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets?name=$b" >/dev/null
               echo "uploaded $b"
             else
