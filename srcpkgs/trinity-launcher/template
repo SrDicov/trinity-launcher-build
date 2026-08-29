@@ -9,7 +9,7 @@ license="GPL-3.0-or-later"
 homepage="https://github.com/SrDicov/trinity-launcher-build"
 distfiles="https://github.com/SrDicov/trinity-launcher-build/releases/download/${version}/trinity"
 checksum=e766b566fc69b5e2cee916f4b99324fd0b77318cbf2af93c478d2d3ba9fc0b48
-depends="qt6-qtbase qt6-qtsvg qt6-qtdeclarative libX11 mesa mcpelauncher-client mcpelauncher-extract"
+depends="qt6-base qt6-svg qt6-declarative libX11 mesa mcpelauncher-client mcpelauncher-extract"
 
 do_extract() {
 	:
