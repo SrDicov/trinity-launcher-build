@@ -47,6 +47,14 @@ jobs:
           git fetch origin
           git checkout "${{ inputs.manifest_sha }}"
           git submodule update --init --recursive
+          # Apply Trinity overlay patches on top of pristine upstream client
+          cd mcpelauncher-client
+          for p in ../../../patches/mcpelauncher-client/*.patch; do
+            [ -f "$p" ] || continue
+            echo "applying client patch: $p"
+            git apply "$p"
+          done
+          cd ../..
 
       - name: Patch musl headers (__unused clash + sys/cdefs.h shim)
         shell: bash

@@ -1,0 +1,213 @@
+diff --git a/src/jni/java_types.h b/src/jni/java_types.h
+index 7c3680b..ef946c0 100644
+--- a/src/jni/java_types.h
++++ b/src/jni/java_types.h
+@@ -1,6 +1,19 @@
+ #pragma once
+ 
+ #include <fake-jni/fake-jni.h>
++#include <mcpelauncher/path_helper.h>
++
++#include <jni.h>
++#include <cerrno>
++#include <sys/stat.h>
++#include <sys/statvfs.h>
++#include <sys/types.h>
++#include <unistd.h>
++#include <fcntl.h>
++#include <dirent.h>
++#include <cstring>
++#include <string>
++#include <vector>
+ 
+ class File : public FakeJni::JObject {
+ public:
+@@ -14,20 +27,147 @@ public:
+     std::shared_ptr<FakeJni::JString> getPath() {
+         return std::make_shared<FakeJni::JString>(path.c_str());
+     }
+-};
+ 
+-class ClassLoader : public FakeJni::JObject {
+-public:
+-    DEFINE_CLASS_NAME("java/lang/ClassLoader")
++    std::shared_ptr<FakeJni::JString> getAbsolutePath() {
++        return getPath();
++    }
++
++    std::shared_ptr<FakeJni::JString> getName() {
++        size_t pos = path.find_last_of('/');
++        std::string name = (pos == std::string::npos) ? path : path.substr(pos + 1);
++        return std::make_shared<FakeJni::JString>(name);
++    }
++
++    std::shared_ptr<FakeJni::JString> getParent() {
++        size_t pos = path.find_last_of('/');
++        if (pos == std::string::npos || pos == 0)
++            return std::make_shared<FakeJni::JString>("");
++        return std::make_shared<FakeJni::JString>(path.substr(0, pos));
++    }
++
++    FakeJni::JBoolean exists() {
++        return ::access(path.c_str(), F_OK) == 0;
++    }
++
++    FakeJni::JBoolean isDirectory() {
++        struct stat st {};
++        return ::stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
++    }
++
++    FakeJni::JBoolean isFile() {
++        struct stat st {};
++        return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
++    }
++
++    FakeJni::JBoolean canRead() {
++        return ::access(path.c_str(), R_OK) == 0;
++    }
++
++    FakeJni::JBoolean canWrite() {
++        return ::access(path.c_str(), W_OK) == 0;
++    }
++
++    FakeJni::JLong length() {
++        struct stat st {};
++        if (::stat(path.c_str(), &st) != 0)
++            return 0;
++        return (FakeJni::JLong) st.st_size;
++    }
++
++    FakeJni::JLong lastModified() {
++        struct stat st {};
++        if (::stat(path.c_str(), &st) != 0)
++            return 0;
++        return (FakeJni::JLong) st.st_mtime * 1000LL;
++    }
++
++    FakeJni::JBoolean mkdir() {
++        return ::mkdir(path.c_str(), 0755) == 0;
++    }
++
++    FakeJni::JBoolean mkdirs() {
++        if (path.empty())
++            return false;
++        std::string cur;
++        bool absolute = path[0] == '/';
++        if (absolute)
++            cur = "/";
++        size_t i = absolute ? 1 : 0;
++        while (i <= path.size()) {
++            size_t slash = path.find('/', i);
++            std::string part = (slash == std::string::npos) ? path.substr(i) : path.substr(i, slash - i);
++            if (!part.empty()) {
++                if (!cur.empty() && cur.back() != '/')
++                    cur += '/';
++                cur += part;
++                if (::mkdir(cur.c_str(), 0755) != 0 && errno != EEXIST)
++                    return false;
++            }
++            if (slash == std::string::npos)
++                break;
++            i = slash + 1;
++        }
++        return true;
++    }
++
++    FakeJni::JBoolean createNewFile() {
++        int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0644);
++        if (fd < 0)
++            return false;
++        ::close(fd);
++        return true;
++    }
++
++    std::shared_ptr<FakeJni::JArray<FakeJni::JString>> list() {
++        std::vector<std::shared_ptr<FakeJni::JString>> names;
++        ::DIR *dir = ::opendir(path.c_str());
++        if (dir) {
++            while (struct dirent *ent = ::readdir(dir)) {
++                if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
++                    continue;
++                names.push_back(std::make_shared<FakeJni::JString>(ent->d_name));
++            }
++            ::closedir(dir);
++        }
++        auto arr = std::make_shared<FakeJni::JArray<FakeJni::JString>>((jsize) names.size());
++        for (size_t i = 0; i < names.size(); i++)
++            (*arr)[(jint) i] = names[i];
++        return arr;
++    }
++
++    FakeJni::JBoolean remove() {
++        return ::remove(path.c_str()) == 0;
++    }
++
++    FakeJni::JBoolean renameTo(std::shared_ptr<File> dest) {
++        if (!dest)
++            return false;
++        return ::rename(path.c_str(), dest->path.c_str()) == 0;
++    }
++
++    // Free-space queries used by UserStorageChecker. The wrapped path is a
++    // host path (built from storageDirectory); query it directly and fall
++    // back to the data dir, then to 1TiB, so storage is never reported as 0.
++    static FakeJni::JLong spaceOf(const std::string &p, int which) {
++        struct statvfs st {};
++        if (::statvfs(p.c_str(), &st) != 0) {
++            std::string dataDir = PathHelper::getPrimaryDataDirectory();
++            if (p != dataDir && ::statvfs(dataDir.c_str(), &st) != 0)
++                return 1024LL * 1024LL * 1024LL * 1024LL;
++        }
++        unsigned long long blocks = (which == 0) ? st.f_blocks : (which == 1) ? st.f_bfree : st.f_bavail;
++        return (FakeJni::JLong) (blocks * st.f_frsize);
++    }
++
++    FakeJni::JLong getTotalSpace() {
++        return spaceOf(path, 0);
++    }
+ 
+-    static std::shared_ptr<ClassLoader> getInstance() {
+-        static std::shared_ptr<ClassLoader> instance(new ClassLoader);
+-        return instance;
++    FakeJni::JLong getFreeSpace() {
++        return spaceOf(path, 1);
+     }
+ 
+-    std::shared_ptr<FakeJni::JClass> loadClass(std::shared_ptr<FakeJni::JString> str) {
+-        FakeJni::JniEnvContext context;
+-        return std::const_pointer_cast<FakeJni::JClass>(
+-            context.getJniEnv().getVM().findClass(str->asStdString().c_str()));
++    FakeJni::JLong getUsableSpace() {
++        return spaceOf(path, 2);
+     }
+ };
+diff --git a/src/jni/jni_descriptors.cpp b/src/jni/jni_descriptors.cpp
+index df2d51b..89d754f 100644
+--- a/src/jni/jni_descriptors.cpp
++++ b/src/jni/jni_descriptors.cpp
+@@ -43,6 +43,25 @@ BEGIN_NATIVE_DESCRIPTOR(BuildVersion){Field<&BuildVersion::SDK_INT>{}, "SDK_INT"
+     END_NATIVE_DESCRIPTOR
+ 
+     BEGIN_NATIVE_DESCRIPTOR(File){Function<&File::getPath>{}, "getPath"},
++    {Function<&File::getAbsolutePath>{}, "getAbsolutePath"},
++    {Function<&File::getName>{}, "getName"},
++    {Function<&File::getParent>{}, "getParent"},
++    {Function<&File::exists>{}, "exists"},
++    {Function<&File::isDirectory>{}, "isDirectory"},
++    {Function<&File::isFile>{}, "isFile"},
++    {Function<&File::canRead>{}, "canRead"},
++    {Function<&File::canWrite>{}, "canWrite"},
++    {Function<&File::length>{}, "length"},
++    {Function<&File::lastModified>{}, "lastModified"},
++    {Function<&File::mkdir>{}, "mkdir"},
++    {Function<&File::mkdirs>{}, "mkdirs"},
++    {Function<&File::createNewFile>{}, "createNewFile"},
++    {Function<&File::list>{}, "list"},
++    {Function<&File::remove>{}, "delete"},
++    {Function<&File::renameTo>{}, "renameTo"},
++    {Function<&File::getTotalSpace>{}, "getTotalSpace"},
++    {Function<&File::getFreeSpace>{}, "getFreeSpace"},
++    {Function<&File::getUsableSpace>{}, "getUsableSpace"},
+     END_NATIVE_DESCRIPTOR
+ 
+     BEGIN_NATIVE_DESCRIPTOR(ClassLoader){Function<&ClassLoader::loadClass>{}, "loadClass"},
