@@ -1,10 +1,16 @@
-name: build-musl
+name: client-musl
 
-# Full build (extract + client + trinity). Manual only: pushes to main no
-# longer trigger it, so day-to-day fixes use client-musl.yml instead and the
-# already-installed trinity/extract binaries are left alone.
+# Client-only build: compiles ONLY mcpelauncher-client from a given
+# mcpelauncher-manifest SHA. Never touches trinity or mcpelauncher-extract.
+# Trigger manually with the manifest commit to build:
+#   gh workflow run client-musl.yml -f manifest_sha=<sha>
 on:
   workflow_dispatch:
+    inputs:
+      manifest_sha:
+        description: 'mcpelauncher-manifest commit SHA to build'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -26,16 +32,20 @@ jobs:
             openssl-devel zlib-devel libzstd-devel libzip-devel libX11-devel libxcb-devel \
             wayland-devel wayland-protocols libxkbcommon-devel
 
-      - name: Checkout (recursive, shell)
+      - name: Checkout build repo + manifest at input SHA
         shell: bash
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global --add safe.directory '*'
           git config --global url."https://SrDicov:${TOKEN}@github.com/".insteadOf "https://github.com/"
-          git clone --recursive https://github.com/SrDicov/trinity-launcher-build.git repo
+          git clone https://github.com/SrDicov/trinity-launcher-build.git repo
           cd repo
           git checkout "${GITHUB_SHA}"
+          git submodule update --init vendor/mcpelauncher-manifest
+          cd vendor/mcpelauncher-manifest
+          git fetch origin
+          git checkout "${{ inputs.manifest_sha }}"
           git submodule update --init --recursive
 
       - name: Patch musl headers (__unused clash + sys/cdefs.h shim)
@@ -51,19 +61,13 @@ jobs:
           cp repo/musl-shim/sys/cdefs.h /usr/include/sys/cdefs.h
           echo "installed sys/cdefs.h shim"
 
-      - name: Configure & Build (extract + client + trinity)
+      - name: Configure & Build (client only)
         shell: bash
         run: |
           cd repo
           COMPAT="$(pwd)/musl-compat.h"
           CXXFLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_GNU_SOURCE -include $COMPAT -Wno-error -fpermissive"
           CFLAGS="-O3 -msse3 -flto -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -D_LARGEFILE64_SOURCE -D_GNU_SOURCE -include $COMPAT"
-          # 1) mcpelauncher-extract
-          cmake -B vendor/mcpelauncher-extract/build -S vendor/mcpelauncher-extract \
-            -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS"
-          cmake --build vendor/mcpelauncher-extract/build -j"$(nproc)"
-          # 2) mcpelauncher-client (bionic loader from manifest)
           cmake -B vendor/mcpelauncher-manifest/build -S vendor/mcpelauncher-manifest \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
             -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
@@ -71,44 +75,28 @@ jobs:
             -DUSE_OWN_CURL=OFF -DXAL_WEBVIEW_USE_QT=OFF -DXAL_WEBVIEW_USE_CLI=ON -DUSE_SDL3_AUDIO=ON \
             -DGAMEWINDOW_SYSTEM=SDL3 -DSDL_WAYLAND=ON
           cmake --build vendor/mcpelauncher-manifest/build -j"$(nproc)"
-          # 3) trinity (Qt6 frontend)
-          cmake -B build -S . \
-            -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
-            -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS"
-          cmake --build build -j"$(nproc)"
 
-      - name: Publish to release 20260829
+      - name: Publish mcpelauncher-client to release 20260829
         shell: bash
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd repo
           mkdir -p dist
-          # locate + copy each binary (first match only, no head pipes)
-          for b in mcpelauncher-extract mcpelauncher-client trinity; do
-            f=$(find vendor/mcpelauncher-extract/build vendor/mcpelauncher-manifest/build build -type f -name "$b" 2>/dev/null)
-            f=${f%%$'\n'*}
-            if [ -n "$f" ] && [ -f "$f" ]; then cp -v "$f" "dist/$b"; else echo "WARNING: $b missing"; fi
-          done
+          f=$(find vendor/mcpelauncher-manifest/build -type f -name "mcpelauncher-client" 2>/dev/null)
+          f=${f%%$'\n'*}
+          if [ -n "$f" ] && [ -f "$f" ]; then cp -v "$f" "dist/mcpelauncher-client"; else echo "WARNING: mcpelauncher-client missing"; exit 1; fi
           ls -la dist
           AUTH="Authorization: Bearer $TOKEN"
           RELJSON=$(curl -s -H "$AUTH" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/tags/20260829")
           RELID=$(echo "$RELJSON" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('id',''))")
           echo "release id=$RELID"
           ASSETS=$(curl -s -H "$AUTH" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets")
-          for name in mcpelauncher-extract mcpelauncher-client trinity; do
-            AID=$(echo "$ASSETS" | python3 -c "import json,sys;d=json.load(sys.stdin);ids=[a['id'] for a in d if a['name']=='$name'];print(ids[0] if ids else '')" 2>/dev/null)
-            if [ -n "$AID" ]; then
-              curl -s -X DELETE -H "$AUTH" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/assets/$AID" >/dev/null
-            fi
-          done
-          for b in mcpelauncher-extract mcpelauncher-client trinity; do
-            if [ -f "dist/$b" ]; then
-              curl -s -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
-                --data-binary @"dist/$b" "https://uploads.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets?name=$b" >/dev/null
-              echo "uploaded $b"
-            else
-              echo "WARNING: dist/$b missing"
-            fi
-          done
+          AID=$(echo "$ASSETS" | python3 -c "import json,sys;d=json.load(sys.stdin);ids=[a['id'] for a in d if a['name']=='mcpelauncher-client'];print(ids[0] if ids else '')" 2>/dev/null)
+          if [ -n "$AID" ]; then
+            curl -s -X DELETE -H "$AUTH" "https://api.github.com/repos/SrDicov/trinity-launcher-build/releases/assets/$AID" >/dev/null
+          fi
+          curl -s -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
+            --data-binary @"dist/mcpelauncher-client" "https://uploads.github.com/repos/SrDicov/trinity-launcher-build/releases/$RELID/assets?name=mcpelauncher-client" >/dev/null
+          echo "uploaded mcpelauncher-client"
           echo "PUBLISHED https://github.com/SrDicov/trinity-launcher-build/releases/tag/20260829"
