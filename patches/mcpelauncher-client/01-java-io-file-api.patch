@@ -1,5 +1,5 @@
 diff --git a/src/jni/java_types.h b/src/jni/java_types.h
-index 7c3680b..ef946c0 100644
+index 7c3680b..bc522f6 100644
 --- a/src/jni/java_types.h
 +++ b/src/jni/java_types.h
 @@ -1,6 +1,19 @@
@@ -22,15 +22,11 @@ index 7c3680b..ef946c0 100644
  
  class File : public FakeJni::JObject {
  public:
-@@ -14,20 +27,147 @@ public:
+@@ -14,6 +27,149 @@ public:
      std::shared_ptr<FakeJni::JString> getPath() {
          return std::make_shared<FakeJni::JString>(path.c_str());
      }
--};
- 
--class ClassLoader : public FakeJni::JObject {
--public:
--    DEFINE_CLASS_NAME("java/lang/ClassLoader")
++
 +    std::shared_ptr<FakeJni::JString> getAbsolutePath() {
 +        return getPath();
 +    }
@@ -165,22 +161,17 @@ index 7c3680b..ef946c0 100644
 +    FakeJni::JLong getTotalSpace() {
 +        return spaceOf(path, 0);
 +    }
- 
--    static std::shared_ptr<ClassLoader> getInstance() {
--        static std::shared_ptr<ClassLoader> instance(new ClassLoader);
--        return instance;
++
 +    FakeJni::JLong getFreeSpace() {
 +        return spaceOf(path, 1);
-     }
- 
--    std::shared_ptr<FakeJni::JClass> loadClass(std::shared_ptr<FakeJni::JString> str) {
--        FakeJni::JniEnvContext context;
--        return std::const_pointer_cast<FakeJni::JClass>(
--            context.getJniEnv().getVM().findClass(str->asStdString().c_str()));
++    }
++
 +    FakeJni::JLong getUsableSpace() {
 +        return spaceOf(path, 2);
-     }
++    }
  };
+ 
+ class ClassLoader : public FakeJni::JObject {
 diff --git a/src/jni/jni_descriptors.cpp b/src/jni/jni_descriptors.cpp
 index df2d51b..89d754f 100644
 --- a/src/jni/jni_descriptors.cpp
