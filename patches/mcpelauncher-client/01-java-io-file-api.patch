@@ -1,8 +1,8 @@
 diff --git a/src/jni/java_types.h b/src/jni/java_types.h
-index 7c3680b..bc522f6 100644
+index 7c3680b..671c3a4 100644
 --- a/src/jni/java_types.h
 +++ b/src/jni/java_types.h
-@@ -1,6 +1,19 @@
+@@ -1,6 +1,21 @@
  #pragma once
  
  #include <fake-jni/fake-jni.h>
@@ -10,6 +10,8 @@ index 7c3680b..bc522f6 100644
 +
 +#include <jni.h>
 +#include <cerrno>
++#include <cstdio>
++#include <cstdlib>
 +#include <sys/stat.h>
 +#include <sys/statvfs.h>
 +#include <sys/types.h>
@@ -22,7 +24,15 @@ index 7c3680b..bc522f6 100644
  
  class File : public FakeJni::JObject {
  public:
-@@ -14,6 +27,149 @@ public:
+@@ -11,9 +26,178 @@ public:
+     explicit File(std::string path) : path(std::move(path)) {
+     }
+ 
++    static bool storageDebug() {
++        static bool enabled = ::getenv("TRINITY_DEBUG_STORAGE") != nullptr;
++        return enabled;
++    }
++
      std::shared_ptr<FakeJni::JString> getPath() {
          return std::make_shared<FakeJni::JString>(path.c_str());
      }
@@ -81,7 +91,10 @@ index 7c3680b..bc522f6 100644
 +    }
 +
 +    FakeJni::JBoolean mkdir() {
-+        return ::mkdir(path.c_str(), 0755) == 0;
++        bool ok = ::mkdir(path.c_str(), 0755) == 0;
++        if (storageDebug())
++            fprintf(stderr, "[storage] mkdir(%s)=%d\n", path.c_str(), (int) ok);
++        return ok;
 +    }
 +
 +    FakeJni::JBoolean mkdirs() {
@@ -106,11 +119,15 @@ index 7c3680b..bc522f6 100644
 +                break;
 +            i = slash + 1;
 +        }
++        if (storageDebug())
++            fprintf(stderr, "[storage] mkdirs(%s)=1\n", path.c_str());
 +        return true;
 +    }
 +
 +    FakeJni::JBoolean createNewFile() {
 +        int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0644);
++        if (storageDebug())
++            fprintf(stderr, "[storage] createNewFile(%s) fd=%d errno=%d\n", path.c_str(), fd, fd < 0 ? errno : 0);
 +        if (fd < 0)
 +            return false;
 +        ::close(fd);
@@ -131,43 +148,57 @@ index 7c3680b..bc522f6 100644
 +        auto arr = std::make_shared<FakeJni::JArray<FakeJni::JString>>((jsize) names.size());
 +        for (size_t i = 0; i < names.size(); i++)
 +            (*arr)[(jint) i] = names[i];
++        if (storageDebug())
++            fprintf(stderr, "[storage] list(%s)=%zu entries\n", path.c_str(), names.size());
 +        return arr;
 +    }
 +
 +    FakeJni::JBoolean remove() {
-+        return ::remove(path.c_str()) == 0;
++        bool ok = ::remove(path.c_str()) == 0;
++        if (storageDebug())
++            fprintf(stderr, "[storage] delete(%s)=%d\n", path.c_str(), (int) ok);
++        return ok;
 +    }
 +
 +    FakeJni::JBoolean renameTo(std::shared_ptr<File> dest) {
 +        if (!dest)
 +            return false;
-+        return ::rename(path.c_str(), dest->path.c_str()) == 0;
++        bool ok = ::rename(path.c_str(), dest->path.c_str()) == 0;
++        if (storageDebug())
++            fprintf(stderr, "[storage] renameTo(%s -> %s)=%d\n", path.c_str(), dest->path.c_str(), (int) ok);
++        return ok;
 +    }
 +
 +    // Free-space queries used by UserStorageChecker. The wrapped path is a
 +    // host path (built from storageDirectory); query it directly and fall
 +    // back to the data dir, then to 1TiB, so storage is never reported as 0.
-+    static FakeJni::JLong spaceOf(const std::string &p, int which) {
++    static FakeJni::JLong spaceOf(const char *label, const std::string &p, int which) {
 +        struct statvfs st {};
 +        if (::statvfs(p.c_str(), &st) != 0) {
 +            std::string dataDir = PathHelper::getPrimaryDataDirectory();
-+            if (p != dataDir && ::statvfs(dataDir.c_str(), &st) != 0)
++            if (p != dataDir && ::statvfs(dataDir.c_str(), &st) != 0) {
++                if (storageDebug())
++                    fprintf(stderr, "[storage] %s(%s)=1TiB(fallback)\n", label, p.c_str());
 +                return 1024LL * 1024LL * 1024LL * 1024LL;
++            }
 +        }
 +        unsigned long long blocks = (which == 0) ? st.f_blocks : (which == 1) ? st.f_bfree : st.f_bavail;
-+        return (FakeJni::JLong) (blocks * st.f_frsize);
++        FakeJni::JLong ret = (FakeJni::JLong) (blocks * st.f_frsize);
++        if (storageDebug())
++            fprintf(stderr, "[storage] %s(%s)=%lld\n", label, p.c_str(), (long long) ret);
++        return ret;
 +    }
 +
 +    FakeJni::JLong getTotalSpace() {
-+        return spaceOf(path, 0);
++        return spaceOf("getTotalSpace", path, 0);
 +    }
 +
 +    FakeJni::JLong getFreeSpace() {
-+        return spaceOf(path, 1);
++        return spaceOf("getFreeSpace", path, 1);
 +    }
 +
 +    FakeJni::JLong getUsableSpace() {
-+        return spaceOf(path, 2);
++        return spaceOf("getUsableSpace", path, 2);
 +    }
  };
  
